@@ -1,0 +1,397 @@
+I am working on an assignment from a company for sde intern role. I have done projects in MERN stack and know c++ and have studies synatatical Java in my BTech. SO help me complete this assignment, the task is
+2. Objectives
+● Integrate new lexer tokens (BYTE_SIZE, TIME_DURATION) into the Wrangler
+grammar.
+● Update the relevant Java code (wrangler-api, wrangler-core) to handle these new
+token types.
+● Implement a new aggregate directive (aggregate-stats) that utilizes these new
+types.
+● Develop comprehensive test cases, including aggregation scenarios using the
+new units.
+Detailed tasks are-
+(a) Grammar Modication (wrangler-core/src/main/antlr4/.../Directives.g4):
+○ Add the lexer rules for BYTE_SIZE and TIME_DURATION (including helper
+fragments BYTE_UNIT, TIME_UNIT).
+○ Modify relevant parser rules (e.g., value, or create new specic rules like
+byteSizeArg, timeDurationArg) to accept BYTE_SIZE and TIME_DURATION
+tokens where appropriate for directive arguments.
+○ Regenerate the ANTLR Java parser/lexer code using the appropriate build
+process (e.g., mvn compile).
+● (b) API Updates (wrangler-api module):
+○ Create new Java classes ByteSize.java and TimeDuration.java extending Token
+[wrangler-api/src/main/java/io/cdap/wrangler/api/parser/Token.java]
+These classes should parse the token string (e.g., "10KB", "150ms") in
+their constructor.
+■ Provide methods to retrieve the value in a canonical unit (e.g., long
+getBytes() for ByteSize)
+○ Add BYTE_SIZE and TIME_DURATION to the Token Types
+○ Update usage denition and token denition to support specifying these new
+token types as valid directive arguments.
+● (c) Core Parser Updates (wrangler-core module):
+○ Modify by adding visit methods for the parser rules created/modied in step
+3a (e.g., visitByteSizeArg, visitTimeDurationArg, or modifying visitValue if
+applicable).
+○ Hint : chk ctx.getText()).
+○ Add the created token instances to the TokenGroup.
+ New Directive Implementation (wrangler-core module):
+○ Create a new directive class, which can do aggregation, implementing the
+Directive interface
+○ UsageDenition (dene()): The directive should accept at least four
+arguments:
+1. ColumnName (source column with byte sizes).
+2. ColumnName (source column with time durations).
+3. ColumnName (target column name for total size).
+4. ColumnName (target column name for total or average time).
+Optionally, add arguments to specify output units (e.g., 'MB', 'GB',
+'seconds', 'minutes') or aggregation type (total, average).
+○ Initialization : Store the source and target column names provided in the
+arguments.
+○ Execution :
+■ This directive should operate as an aggregate. So you need a store to
+accumulate totals. Think about it. Hint : Chk ExecutorContext
+■ For each row:
+■ Read the byte size value from the source size column.
+■ Read the time duration value from the source time column.
+■ Add these values (converted to canonical units like bytes and
+nanoseconds) to running totals stored in the Store.
+■ Finalization : This method (if using RecipePipeline's aggregation
+capabilities) or logic within the last execute call needs to:
+■ Retrieve the nal totals from the Store.
+■ Perform unit conversions if required by arguments (e.g., convert total
+bytes to MB, total nanoseconds to seconds).
+Return a single new Row containing the target columns with the
+calculated aggregate values (e.g., total_size_mb, total_time_sec).
+● (e) Testing (wrangler-core module):
+○ Add unit tests for the ByteSize and TimeDuration classes, verifying correct
+parsing and canonical value retrieval for various inputs (e.g., "10kb", "1.5MB",
+"5ms", "2.1s").
+○ Add parser tests (e.g., in GrammarBasedParserTest.java or
+RecipeCompilerTest.java to ensure recipes using the new syntax are parsed
+correctly and invalid syntax is rejected.
+○ Add comprehensive unit tests for the new AggregateStats directive. See the
+Test Case Specication below.
+
+Firstly help me install Intellij since I have worked with VSCode
+How to run and compile in intellij
+
+This project is split into multiple modules — api, core, service, proto, storage, transform — and honestly, I'm confused where exactly I’m supposed to put a new directive. Should it go in core? What about helper classes like ByteSize or TimeDuration? Where should tests for those live?
+
+I tried modifying the `Directives.g4` grammar to add support for BYTE_SIZE and TIME_DURATION tokens. I added a couple of fragments for BYTE_UNIT and TIME_UNIT, but now I’m not sure what else needs to be updated so that everything works end-to-end. Do I need to modify the `value` rule directly or should I write separate rules like `byteSizeArg` and `timeDurationArg`?
+
+After editing the grammar, I’m getting a “no viable alternative at input” error during compilation. What does this even mean? How do I figure out what’s going wrong in the grammar?
+
+I want to write a utility class `ByteSize.java` that can take strings like "10KB", "1.5MB", "2 GB" and convert them to bytes. I tried doing it but my regex isn’t handling all the formats properly, especially inputs like ".5MB" or "10kb" in lowercase. What’s the right way to write this?
+
+This error comes-
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:2.17:check (validate) on project wrangler-api: Failed during checkstyle execution: There are 7 errors reported by Checkstyle 6.19 with checkstyle.xml ruleset. -> [Help 1]
+[ERROR]
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR]
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
+[ERROR]
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <args> -rf:wrangler-api
+
+Now this error-
+[INFO] Wrangler ........................................... SUCCESS [  0.566 s]
+[INFO] Wrangler API ....................................... SUCCESS [  0.402 s]
+[INFO] Wrangler REST Protocol Classes ..................... SUCCESS [  0.122 s]
+[INFO] Wrangler Core ...................................... FAILURE [  7.735 s]
+[INFO] Wrangler Storage ................................... SKIPPED
+[INFO] Wrangler Service ................................... SKIPPED
+[INFO] Wrangler Testing Framework ......................... SKIPPED
+[INFO] Wrangler Transform ................................. SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  9.578 s
+[INFO] Finished at: 2025-04-13T11:57:54+05:30
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.13.0:compile (default-compile) on project wrangler-core: Compilation failure: Compilation failure:
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[24,28] cannot find symbol
+[ERROR]   symbol:   class ParserRule
+[ERROR]   location: package io.cdap.wrangler.api
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[25,28] cannot find symbol
+[ERROR]   symbol:   class UsageDefinition
+[ERROR]   location: package io.cdap.wrangler.api
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[26,32] package io.cdap.wrangler.api.row does not exist
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[48,34] cannot find symbol
+[ERROR]   symbol:   class Directive
+[ERROR]   location: package io.cdap.wrangler.api.annotations
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[68,12] cannot find symbol
+[ERROR]   symbol:   class UsageDefinition
+[ERROR]   location: class io.cdap.wrangler.directives.aggregates.AggregateStats
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[95,35] cannot find symbol
+[ERROR]   symbol:   class Row
+[ERROR]   location: class io.cdap.wrangler.directives.aggregates.AggregateStats
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[95,17] cannot find symbol
+[ERROR]   symbol:   class Row
+[ERROR]   location: class io.cdap.wrangler.directives.aggregates.AggregateStats
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[54,8] io.cdap.wrangler.directives.aggregates.AggregateStats is not abstract and does not override abstract method execute(java.lang.Object,io.cdap.wrangler.api.ExecutorContext) in io.cdap.wrangler.api.Executor
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[67,5] method does not override or implement a method from a supertype
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[69,16] cannot find symbol
+[ERROR]   symbol:   variable UsageDefinition
+[ERROR]   location: class io.cdap.wrangler.directives.aggregates.AggregateStats
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[87,17] cannot find symbol
+[ERROR]   symbol:   method has(java.lang.String)
+[ERROR]   location: variable args of type io.cdap.wrangler.api.Arguments
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[94,5] method does not override or implement a method from a supertype
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[97,14] cannot find symbol
+[ERROR]   symbol:   class Row
+[ERROR]   location: class io.cdap.wrangler.directives.aggregates.AggregateStats
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[129,9] cannot find symbol
+[ERROR]   symbol:   class Row
+[ERROR]   location: class io.cdap.wrangler.directives.aggregates.AggregateStats
+[ERROR] /C:/Users/Jagji/OneDrive/Desktop/wrangler/wrangler-core/src/main/java/io/cdap/directives/aggregates/AggregateStats.java:[129,26] cannot find symbol
+[ERROR]   symbol:   class Row
+[ERROR]   location: class io.cdap.wrangler.directives.aggregates.AggregateStats
+[ERROR] -> [Help 1]
+[ERROR]
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR]
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+[ERROR]
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <args> -rf:wrangler-core
+
+Same thing for time durations — I need a class `TimeDuration.java` that can parse inputs like "500ms", "2.5s", "1min" and return milliseconds or nanoseconds. How should I structure it so it handles edge cases cleanly?
+
+I added the new token types in `TokenType.java`, but they’re not being recognized in some places. Is there another file I’m supposed to update? I think the lexer/parser isn’t picking up changes properly even after rebuild.
+
+resolve this-
+Checkstyle Results
+The following document contains the results of Checkstyle 6.19 with sun_checks.xml ruleset. rss feed
+
+Summary
+Files	 Info	 Warnings	 Errors
+5	0	0	278
+Files
+File	 I	 W	 E
+io/cdap/wrangler/Precondition.java	0	0	17
+io/cdap/wrangler/PreconditionException.java	0	0	3
+io/cdap/wrangler/Wrangler.java	0	0	212
+io/cdap/wrangler/WranglerErrorUtil.java	0	0	24
+io/cdap/wrangler/WranglerPipelineContext.java	0	0	22
+Rules
+Category	Rule	Violations	Severity
+coding	AvoidInlineConditionals	2	 Error
+HiddenField	12	 Error
+SimplifyBooleanExpression	1	 Error
+design	DesignForExtension	15	 Error
+imports	UnusedImports
+processJavadoc: "false"
+3	 Error
+javadoc	JavadocMethod	22	 Error
+JavadocPackage	1	 Error
+JavadocStyle	3	 Error
+JavadocVariable	48	 Error
+misc	FinalParameters	45	 Error
+NewlineAtEndOfFile	5	 Error
+sizes	LineLength	120	 Error
+whitespace	OperatorWrap	1	 Error
+Details
+io/cdap/wrangler/Precondition.java
+Severity	Category	Rule	Message	Line
+ Error	misc	NewlineAtEndOfFile	File does not end with a newline.
+ Error	javadoc	JavadocPackage	Missing package-info.java file.
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	33
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	34
+ Error	sizes	LineLength	Line is longer than 80 characters (found 108).	35
+ Error	sizes	LineLength	Line is longer than 80 characters (found 103).	36
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	36
+ Error	javadoc	JavadocMethod	Missing a Javadoc comment.	38
+ Error	misc	FinalParameters	Parameter condition should be final.	38
+ Error	coding	HiddenField	'condition' hides a field.	38
+ Error	design	DesignForExtension	Method 'createContext' is not designed for extension - needs to be abstract, final or empty.	52
+ Error	javadoc	JavadocMethod	Missing a Javadoc comment.	52
+ Error	design	DesignForExtension	Method 'apply' is not designed for extension - needs to be abstract, final or empty.	64
+ Error	javadoc	JavadocMethod	Missing a Javadoc comment.	64
+ Error	misc	FinalParameters	Parameter row should be final.	64
+ Error	sizes	LineLength	Line is longer than 80 characters (found 89).	76
+ Error	sizes	LineLength	Line is longer than 80 characters (found 101).	82
+io/cdap/wrangler/PreconditionException.java
+Severity	Category	Rule	Message	Line
+ Error	misc	NewlineAtEndOfFile	File does not end with a newline.
+ Error	javadoc	JavadocMethod	Missing a Javadoc comment.	23
+ Error	misc	FinalParameters	Parameter message should be final.	23
+io/cdap/wrangler/Wrangler.java
+Severity	Category	Rule	Message	Line
+ Error	misc	NewlineAtEndOfFile	File does not end with a newline.
+ Error	imports	UnusedImports	Unused import - io.cdap.wrangler.api.RecipeException.	59
+ Error	imports	UnusedImports	Unused import - io.cdap.wrangler.parser.NoOpDirectiveContext.	71
+ Error	sizes	LineLength	Line is longer than 80 characters (found 83).	103
+ Error	sizes	LineLength	Line is longer than 80 characters (found 85).	104
+ Error	sizes	LineLength	Line is longer than 80 characters (found 84).	109
+ Error	sizes	LineLength	Line is longer than 80 characters (found 114).	110
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	111
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	114
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	115
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	116
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	117
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	118
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	119
+ Error	sizes	LineLength	Line is longer than 80 characters (found 89).	120
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	120
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	123
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	124
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	125
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	128
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	129
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	132
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	135
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	138
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	141
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	144
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	147
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	150
+ Error	javadoc	JavadocVariable	Missing a Javadoc comment.	153
+ Error	sizes	LineLength	Line is longer than 80 characters (found 94).	155
+ Error	javadoc	JavadocMethod	Missing a Javadoc comment.	156
+ Error	misc	FinalParameters	Parameter config should be final.	156
+ Error	coding	HiddenField	'config' hides a field.	156
+ Error	sizes	LineLength	Line is longer than 80 characters (found 82).	161
+ Error	sizes	LineLength	Line is longer than 80 characters (found 115).	165
+ Error	design	DesignForExtension	Method 'configurePipeline' is not designed for extension - needs to be abstract, final or empty.	171
+ Error	misc	FinalParameters	Parameter configurer should be final.	172
+ Error	sizes	LineLength	Line is longer than 80 characters (found 87).	174
+ Error	sizes	LineLength	Line is longer than 80 characters (found 85).	178
+ Error	sizes	LineLength	Line is longer than 80 characters (found 86).	186
+ Error	sizes	LineLength	Line is longer than 80 characters (found 112).	188
+ Error	sizes	LineLength	Line is longer than 80 characters (found 91).	193
+ Error	sizes	LineLength	Line is longer than 80 characters (found 81).	200
+ Error	sizes	LineLength	Line is longer than 80 characters (found 87).	211
+ Error	sizes	LineLength	Line is longer than 80 characters (found 95).	216
+ Error	sizes	LineLength	Line is longer than 80 characters (found 94).	217
+ Error	sizes	LineLength	Line is longer than 80 characters (found 109).	220
+ Error	sizes	LineLength	Line is longer than 80 characters (found 85).	226
+ Error	sizes	LineLength	Line is longer than 80 characters (found 86).	238
+ Error	sizes	LineLength	Line is longer than 80 characters (found 108).	240
+ Error	whitespace	OperatorWrap	'+' should be on a new line.	240
+ Error	sizes	LineLength	Line is longer than 80 characters (found 87).	242
+ Error	sizes	LineLength	Line is longer than 80 characters (found 86).	251
+ Error	sizes	LineLength	Line is longer than 80 characters (found 82).	255
+ Error	sizes	LineLength	Line is longer than 80 characters (found 82).	259
+ Error	sizes	LineLength	Line is longer than 80 characters (found 96).	270
+ Error	sizes	LineLength	Line is longer than 80 characters (found 89).	271
+ Error	sizes	LineLength	Line is longer than 80 characters (found 87).	274
+ Error	sizes	LineLength	Line is longer than 80 characters (found 83).	275
+ Error	sizes	LineLength	Line is longer than 80 characters (found 89).	277
+ Error	sizes	LineLength	Line is longer than 80 characters (found 97).	282
+ Error	sizes	LineLength	Line is longer than 80 characters (found 105).	294
+ Error	sizes	LineLength	Line is longer than 80 characters (found 107).	300
+ Error	design	DesignForExtension	Method 'prepareRun' is not designed for extension - needs to be abstract, final or empty.	306
+ Error	misc	FinalParameters	Parameter context should be final.	307
+ Error	sizes	LineLength	Line is longer than 80 characters (found 102).	313
+ Error	sizes	LineLength	Line is longer than 80 characters (found 92).	322
+ Error	sizes	LineLength	Line is longer than 80 characters (found 83).	323
+ Error	sizes	LineLength	Line is longer than 80 characters (found 105).	325
+ Error	sizes	LineLength	Line is longer than 80 characters (found 93).	341
+ Error	sizes	LineLength	Line is longer than 80 characters (found 94).	342
+ Error	sizes	LineLength	Line is longer than 80 characters (found 91).	347
+ Error	sizes	LineLength
+
+Cannot resolve method 'parse' in 'TimeDuration'
+my timeduration.java is
+/*
+ * Copyright © 2024 Manas.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+package io.cdap.wrangler.api.parser;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonPrimitive;
+
+/**
+ * TimeDuration token parses a string like "150ms" or "2s" into a canonical
+ * value in nanoseconds.
+ */
+public class TimeDuration implements Token {
+    private final double nanos;
+    private final String raw;
+
+    public TimeDuration(String raw) {
+        this.raw = raw.trim();
+        this.nanos = parseToNanos(this.raw);
+    }
+
+    private double parseToNanos(String input) {
+        input = input.toLowerCase();
+        if (input.endsWith("ns")) {
+            return Double.parseDouble(input.substring(0, input.length() - 2));
+        } else if (input.endsWith("us")) {
+            return Double.parseDouble(input.substring(0, input.length() - 2)) * 1_000;
+        } else if (input.endsWith("ms")) {
+            return Double.parseDouble(input.substring(0, input.length() - 2)) * 1_000_000;
+        } else if (input.endsWith("sec")) {
+            return Double.parseDouble(input.substring(0, input.length() - 3)) * 1_000_000_000;
+        } else if (input.endsWith("s")) {
+            return Double.parseDouble(input.substring(0, input.length() - 1)) * 1_000_000_000;
+        } else if (input.endsWith("min")) {
+            return Double.parseDouble(input.substring(0, input.length() - 3)) * 60 * 1_000_000_000L;
+        } else if (input.endsWith("m")) {
+            return Double.parseDouble(input.substring(0, input.length() - 1)) * 60 * 1_000_000_000L;
+        } else if (input.endsWith("hr")) {
+            return Double.parseDouble(input.substring(0, input.length() - 2)) * 3600 * 1_000_000_000L;
+        } else if (input.endsWith("h")) {
+            return Double.parseDouble(input.substring(0, input.length() - 1)) * 3600 * 1_000_000_000L;
+        } else if (input.endsWith("d")) {
+            return Double.parseDouble(input.substring(0, input.length() - 1)) * 86400 * 1_000_000_000L;
+        } else {
+            throw new IllegalArgumentException("Invalid time duration format: " + input);
+        }
+    }
+
+    /**
+     * Returns the parsed value in nanoseconds.
+     */
+    public long getNanos() {
+        return (long) nanos;
+    }
+
+Error running 'TimeDurationTest.testParseTimeDuration'
+Error running TimeDurationTest.testParseTimeDuration. Command line is too long.
+Shorten the command line and rerun.
+
+it shows test passed, just wanna confirm that i should run the test by clicking on the green icon in intellij before the testParseByteSize function and select the run testParseByteSize option
+
+just confirm if everything from here is done
+(e) Testing (wrangler-core module):
+○ Add unit tests for the ByteSize and TimeDuration classes, verifying correct
+parsing and canonical value retrieval for various inputs (e.g., "10kb", "1.5MB",
+"5ms", "2.1s").
+○ Add parser tests (e.g., in GrammarBasedParserTest.java or
+RecipeCompilerTest.java to ensure recipes using the new syntax are parsed
+correctly and invalid syntax is rejected.
+○ Add comprehensive unit tests for the new AggregateStats directive. See the
+Test Case Specication below.
+
+start with parser tests
+
+Cannot resolve constructor 'GrammarBasedParser()'
+Expected no arguments but found 1
+Cannot resolve method 'assertEquals' in 'GrammarBasedParserTest'
+
+I made a new directive class `AggregateStats.java` but I’m getting a ton of build errors. Stuff like “Row not found”, “Directive can’t be resolved”, “UsageDefinition doesn’t exist”, and other missing symbols. Am I missing imports? Or did I use the wrong base class? Which module are these supposed to come from?
+
+I also don’t understand how to properly keep state between rows in a directive. I heard something about `ExecutorContext.getStore()` — is that the right approach if I want to store cumulative values like total size or time?
+
+Can you walk me through the proper structure of a directive that does aggregation? Like what should go inside `initialize`, what goes in `execute`, and what do I put in `destroy` or `finalize`? Full example would help a lot.
+
+I need to write unit tests for my ByteSize and TimeDuration classes too. What’s the best way to test things like "10KB", "0.5MB", and "2GB" conversions? And for time, how do I verify that "2s" becomes 2000ms and "1.5min" is handled correctly?
+
+Also want to test my `AggregateStats` directive — want to feed it rows with size/time columns and make sure it outputs total size in MB and total time in seconds. How should I structure this test?
+
+Even after doing everything I thought was right, `mvn compile` is still throwing grammar-related errors. Why is the lexer not picking up the new tokens? Do I need to regenerate something manually?
+
+Finally, I want to add a clean usage section in the `README.md` that shows how to call the new directive. Something like:
+
